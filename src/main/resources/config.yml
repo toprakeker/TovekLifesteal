@@ -1,0 +1,21 @@
+# TovekLifesteal configuration
+default-hearts: 10
+min-hearts: 1
+max-hearts: 20
+heart-item-material: NETHER_STAR
+heart-item-model-data: 1001
+
+# Action taken when a player loses all hearts: SPECTATOR or BAN
+elimination-action: SPECTATOR
+elimination-broadcast: "<red><bold>%player%</bold> has lost all their hearts and was eliminated!</red>"
+
+messages:
+  heart-gained: "<green>You consumed a Heart and gained +1 Max Health!</green>"
+  heart-maxed: "<red>You have already reached the maximum heart limit (%max% hearts).</red>"
+  heart-withdrawn: "<green>You withdrew %amount% heart(s) into physical items.</green>"
+  not-enough-hearts: "<red>You must have more than %min% hearts to withdraw!</red>"
+  revived: "<green>You were revived by %reviver% with %hearts% hearts!</green>"
+  target-revived: "<green>Successfully revived %target%.</green>"
+  already-alive: "<red>That player is not eliminated.</red>"
+  player-killed: "<green>You killed <white>%victim%</white> and stole 1 Heart!</green>"
+  player-died: "<red>You were slain by <white>%killer%</white> and lost 1 Heart!</red>"
