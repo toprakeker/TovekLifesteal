@@ -29,9 +29,11 @@ public class PlayerDeathListener implements Listener {
 
         int currentVictimHearts = plugin.getHeartManager().getHearts(victim);
         int newVictimHearts = currentVictimHearts - 1;
-        plugin.getHeartManager().setHearts(victim, Math.max(0, newVictimHearts));
+        int minHearts = plugin.getConfig().getInt("min-hearts", 1);
+        
+        plugin.getHeartManager().setHearts(victim, Math.max(minHearts, newVictimHearts));
 
-        if (killer != null && !killer.equals(victim)) {
+        if (killer != null && !killer.getUniqueId().equals(victim.getUniqueId())) {
             boolean gained = plugin.getHeartManager().addHeart(killer);
             if (!gained) {
                 victim.getWorld().dropItemNaturally(victim.getLocation(), plugin.getHeartManager().createHeartItem(1));
@@ -47,7 +49,6 @@ public class PlayerDeathListener implements Listener {
             victim.getWorld().dropItemNaturally(victim.getLocation(), plugin.getHeartManager().createHeartItem(1));
         }
 
-        int minHearts = plugin.getConfig().getInt("min-hearts", 1);
         if (newVictimHearts < minHearts) {
             handleElimination(victim);
         }

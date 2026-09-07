@@ -21,7 +21,7 @@ public class HeartItemListener implements Listener {
 
     @EventHandler
     public void onInteract(PlayerInteractEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) return;
+        if (event.getHand() == null) return;
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
 
         ItemStack item = event.getItem();
@@ -39,7 +39,19 @@ public class HeartItemListener implements Listener {
             return;
         }
 
-        item.subtract(1);
+        // Safely consume 1 item from whatever hand was clicked
+        if (event.getHand() == EquipmentSlot.HAND) {
+            ItemStack main = player.getInventory().getItemInMainHand();
+            if (plugin.getHeartManager().isHeartItem(main)) {
+                main.subtract(1);
+            }
+        } else if (event.getHand() == EquipmentSlot.OFF_HAND) {
+            ItemStack off = player.getInventory().getItemInOffHand();
+            if (plugin.getHeartManager().isHeartItem(off)) {
+                off.subtract(1);
+            }
+        }
+
         player.sendMessage(mm.deserialize(plugin.getConfig().getString("messages.heart-gained", "")));
         player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1f, 1.5f);
     }
