@@ -32,7 +32,7 @@ public class HeartManager {
     public void setHearts(Player player, int hearts) {
         AttributeInstance attr = player.getAttribute(Attribute.MAX_HEALTH);
         if (attr != null) {
-            double health = Math.max(1.0, hearts * 2.0);
+            double health = Math.max(2.0, hearts * 2.0);
             attr.setBaseValue(health);
             if (player.getHealth() > health) {
                 player.setHealth(health);
