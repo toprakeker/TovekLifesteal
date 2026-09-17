@@ -7,11 +7,21 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-1.21.x-blue?style=flat-square)](https://papermc.io)
 
-**Lightweight, lag-free Lifesteal SMP core for Paper & Purpur 1.21+.**
+**High-throughput Lifesteal SMP core for Paper & Purpur 1.21+.**
 
 [📦 Download Latest Release](https://github.com/toprakeker/TovekLifesteal/releases/latest) • [🌐 Developer Portfolio](https://toprakeker.com)
 
 </div>
+
+---
+
+## Technical Architecture
+
+TovekLifesteal is engineered for production SMP networks requiring deterministic data handling and dupe protection:
+- **Zero Blocking I/O on Server Thread:** All text generation, MiniMessage deserialization, and math calculations operate entirely in memory without stalling world ticks.
+- **NBT & PDC Verification:** Physical heart items are backed by PersistentDataContainer keys (`NamespacedKey`) with strict NBT sanitization to prevent inventory duplication and offhand desync glitches.
+- **Defensive Attribute Clamping:** Heart adjustments are clamped against server bounds to prevent invalid `GENERIC_MAX_HEALTH` exceptions or attribute overflows.
+- **Transactional Withdraw Logic:** Heart withdrawal guarantees atomic inventory verification before adjusting player health attributes, preventing loss on full inventories.
 
 ---
 
@@ -23,7 +33,6 @@
 - **Custom Crafting Recipe:** Craft Heart Fragments using Netherite, Totems of Undying, and Nether Stars.
 - **Elimination Handling:** Automated spectator mode or custom actions when players reach 0 hearts.
 - **Revive System:** Admins can revive eliminated players back into the survival world.
-- **Zero Lag:** Native Adventure Component & MiniMessage rendering, zero main-thread blocking operations.
 
 ---
 
@@ -63,4 +72,4 @@ Compiled jar will be located in `build/libs/`.
 
 ## License
 
-MIT License. Feel free to use on public servers, fork, or modify.
+MIT License. Free for public server networks and modification.

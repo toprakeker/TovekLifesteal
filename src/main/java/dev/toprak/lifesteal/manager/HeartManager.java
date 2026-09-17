@@ -9,6 +9,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -16,6 +17,9 @@ import org.bukkit.persistence.PersistentDataType;
 import java.util.List;
 
 public class HeartManager {
+    /** Upper bound for a single item give/withdraw so nobody can request billions of items. */
+    public static final int MAX_ITEMS_PER_OPERATION = 64 * 36;
+
     private final LifestealPlugin plugin;
     private final MiniMessage mm = MiniMessage.miniMessage();
 
@@ -23,25 +27,40 @@ public class HeartManager {
         this.plugin = plugin;
     }
 
-    public int getHearts(Player player) {
-        AttributeInstance attr = player.getAttribute(Attribute.MAX_HEALTH);
-        if (attr == null) return 10;
-        return (int) Math.round(attr.getBaseValue() / 2.0);
+    public int getMinHearts() {
+        return HeartMath.sanitizeMin(plugin.getConfig().getInt("min-hearts", 1));
     }
 
+    public int getMaxHearts() {
+        return HeartMath.sanitizeMax(plugin.getConfig().getInt("max-hearts", 20), getMinHearts());
+    }
+
+    public int getDefaultHearts() {
+        return HeartMath.clampHearts(plugin.getConfig().getInt("default-hearts", 10), getMinHearts(), getMaxHearts());
+    }
+
+    public int getHearts(Player player) {
+        AttributeInstance attr = player.getAttribute(Attribute.MAX_HEALTH);
+        if (attr == null) return getDefaultHearts();
+        return HeartMath.healthToHearts(attr.getBaseValue());
+    }
+
+    /**
+     * Sets the player's max hearts, hard-clamped to [1, 512]. Current health is clamped down to the
+     * new maximum only when the player is alive (setHealth on a dead player is invalid).
+     */
     public void setHearts(Player player, int hearts) {
         AttributeInstance attr = player.getAttribute(Attribute.MAX_HEALTH);
-        if (attr != null) {
-            double health = Math.max(2.0, hearts * 2.0);
-            attr.setBaseValue(health);
-            if (player.getHealth() > health) {
-                player.setHealth(health);
-            }
+        if (attr == null) return;
+        double health = HeartMath.heartsToHealth(hearts);
+        attr.setBaseValue(health);
+        if (!player.isDead() && player.getHealth() > health) {
+            player.setHealth(health);
         }
     }
 
     public boolean addHeart(Player player) {
-        int max = plugin.getConfig().getInt("max-hearts", 20);
+        int max = getMaxHearts();
         int current = getHearts(player);
         if (current >= max) {
             return false;
@@ -50,12 +69,35 @@ public class HeartManager {
         return true;
     }
 
-    public ItemStack createHeartItem(int amount) {
+    // ---- elimination state (persisted in the player's PDC so it survives relogs/crashes) ----
+
+    public boolean isEliminated(Player player) {
+        Byte flag = player.getPersistentDataContainer().get(plugin.getEliminatedKey(), PersistentDataType.BYTE);
+        return flag != null && flag == (byte) 1;
+    }
+
+    public void setEliminated(Player player, boolean eliminated) {
+        if (eliminated) {
+            player.getPersistentDataContainer().set(plugin.getEliminatedKey(), PersistentDataType.BYTE, (byte) 1);
+        } else {
+            player.getPersistentDataContainer().remove(plugin.getEliminatedKey());
+        }
+    }
+
+    // ---- items ----
+
+    private Material heartMaterial() {
         String matName = plugin.getConfig().getString("heart-item-material", "NETHER_STAR");
         Material mat = Material.matchMaterial(matName);
-        if (mat == null) mat = Material.NETHER_STAR;
+        if (mat == null || mat.isAir() || !mat.isItem()) mat = Material.NETHER_STAR;
+        return mat;
+    }
 
-        ItemStack item = new ItemStack(mat, Math.max(1, amount));
+    /** Creates a single stack. Amount is clamped to [1, material max stack size]. */
+    public ItemStack createHeartItem(int amount) {
+        Material mat = heartMaterial();
+        int maxStack = Math.max(1, mat.getMaxStackSize());
+        ItemStack item = new ItemStack(mat, Math.max(1, Math.min(maxStack, amount)));
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             meta.displayName(mm.deserialize("<red><bold>Heart Fragment</bold></red>"));
@@ -75,8 +117,29 @@ public class HeartManager {
         return item;
     }
 
+    /**
+     * Gives {@code amount} heart items split into legal stack sizes; anything that does not fit is
+     * dropped at the player's feet as legal-sized stacks (never an oversized item entity).
+     * Returns the number of items actually created.
+     */
+    public int giveHeartItems(Player player, int amount) {
+        int total = Math.max(0, Math.min(MAX_ITEMS_PER_OPERATION, amount));
+        if (total == 0) return 0;
+        int maxStack = Math.max(1, heartMaterial().getMaxStackSize());
+        for (int size : HeartMath.splitStacks(total, maxStack)) {
+            var leftover = player.getInventory().addItem(createHeartItem(size));
+            for (ItemStack rest : leftover.values()) {
+                for (int drop : HeartMath.splitStacks(rest.getAmount(), maxStack)) {
+                    player.getWorld().dropItemNaturally(player.getLocation(), createHeartItem(drop));
+                }
+            }
+        }
+        return total;
+    }
+
     public boolean isHeartItem(ItemStack item) {
         if (item == null || item.getType().isAir()) return false;
+        if (!item.hasItemMeta()) return false;
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return false;
         return meta.getPersistentDataContainer().has(plugin.getHeartKey(), PersistentDataType.BYTE);
@@ -91,7 +154,9 @@ public class HeartManager {
         recipe.shape("NTN", "TST", "NTN");
         recipe.setIngredient('N', Material.NETHERITE_INGOT);
         recipe.setIngredient('T', Material.TOTEM_OF_UNDYING);
-        recipe.setIngredient('S', Material.NETHER_STAR);
+        // Exact choice: a Heart Fragment (which may itself be a nether star) must not be usable as the
+        // core ingredient, otherwise a heart item silently becomes crafting fuel.
+        recipe.setIngredient('S', new RecipeChoice.ExactChoice(new ItemStack(Material.NETHER_STAR)));
 
         Bukkit.addRecipe(recipe);
     }

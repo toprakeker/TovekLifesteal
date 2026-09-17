@@ -1,4 +1,5 @@
 # TovekLifesteal configuration
+# min-hearts is clamped to >= 1 and max-hearts to <= 512 (vanilla max_health cap) at runtime.
 default-hearts: 10
 min-hearts: 1
 max-hearts: 20

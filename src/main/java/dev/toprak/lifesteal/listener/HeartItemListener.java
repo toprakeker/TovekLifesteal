@@ -2,14 +2,17 @@ package dev.toprak.lifesteal.listener;
 
 import dev.toprak.lifesteal.LifestealPlugin;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import org.bukkit.GameMode;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 
 public class HeartItemListener implements Listener {
     private final LifestealPlugin plugin;
@@ -19,37 +22,45 @@ public class HeartItemListener implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.LOWEST)
     public void onInteract(PlayerInteractEvent event) {
-        if (event.getHand() == null) return;
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
+        EquipmentSlot hand = event.getHand();
+        if (hand != EquipmentSlot.HAND && hand != EquipmentSlot.OFF_HAND) return;
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK
+                && action != Action.LEFT_CLICK_AIR && action != Action.LEFT_CLICK_BLOCK) return;
+        if (!plugin.getHeartManager().isHeartItem(event.getItem())) return;
 
-        ItemStack item = event.getItem();
-        if (!plugin.getHeartManager().isHeartItem(item)) return;
-
-        event.setCancelled(true);
         Player player = event.getPlayer();
+        // Always swallow the click for heart items so they can never break blocks or place/use base material
+        event.setCancelled(true);
 
-        boolean added = plugin.getHeartManager().addHeart(player);
-        if (!added) {
-            int max = plugin.getConfig().getInt("max-hearts", 20);
+        if (player.isDead() || player.getGameMode() == GameMode.SPECTATOR
+                || plugin.getHeartManager().isEliminated(player)) {
+            return;
+        }
+
+        // Re-read the live slot rather than trusting the event snapshot; the slot is the source of truth.
+        PlayerInventory inv = player.getInventory();
+        ItemStack live = hand == EquipmentSlot.HAND ? inv.getItemInMainHand() : inv.getItemInOffHand();
+        if (!plugin.getHeartManager().isHeartItem(live) || live.getAmount() <= 0) return;
+
+        if (!plugin.getHeartManager().addHeart(player)) {
+            int max = plugin.getHeartManager().getMaxHearts();
             player.sendMessage(mm.deserialize(plugin.getConfig().getString("messages.heart-maxed", "")
                     .replace("%max%", String.valueOf(max))));
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
             return;
         }
 
-        // Safely consume 1 item from whatever hand was clicked
-        if (event.getHand() == EquipmentSlot.HAND) {
-            ItemStack main = player.getInventory().getItemInMainHand();
-            if (plugin.getHeartManager().isHeartItem(main)) {
-                main.subtract(1);
-            }
-        } else if (event.getHand() == EquipmentSlot.OFF_HAND) {
-            ItemStack off = player.getInventory().getItemInOffHand();
-            if (plugin.getHeartManager().isHeartItem(off)) {
-                off.subtract(1);
-            }
+        // Consume exactly one from the clicked slot and write the slot back explicitly.
+        int remaining = live.getAmount() - 1;
+        ItemStack replacement = remaining > 0 ? live.clone() : null;
+        if (replacement != null) replacement.setAmount(remaining);
+        if (hand == EquipmentSlot.HAND) {
+            inv.setItemInMainHand(replacement);
+        } else {
+            inv.setItemInOffHand(replacement);
         }
 
         player.sendMessage(mm.deserialize(plugin.getConfig().getString("messages.heart-gained", "")));

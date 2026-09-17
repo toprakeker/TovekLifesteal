@@ -1,6 +1,8 @@
 package dev.toprak.lifesteal.command;
 
 import dev.toprak.lifesteal.LifestealPlugin;
+import dev.toprak.lifesteal.manager.HeartManager;
+import dev.toprak.lifesteal.manager.HeartMath;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -55,11 +57,18 @@ public class LifestealCommand implements CommandExecutor, TabCompleter {
                 if (args.length > 2) {
                     try {
                         count = Integer.parseInt(args[2]);
-                    } catch (NumberFormatException ignored) {}
+                    } catch (NumberFormatException e) {
+                        sender.sendMessage(mm.deserialize("<red>Invalid amount.</red>"));
+                        return true;
+                    }
                 }
-                var leftover = target.getInventory().addItem(plugin.getHeartManager().createHeartItem(count));
-                leftover.values().forEach(item -> target.getWorld().dropItemNaturally(target.getLocation(), item));
-                sender.sendMessage(mm.deserialize("<green>Gave " + count + " heart item(s) to " + target.getName() + ".</green>"));
+                if (count < 1 || count > HeartManager.MAX_ITEMS_PER_OPERATION) {
+                    sender.sendMessage(mm.deserialize("<red>Amount must be between 1 and "
+                            + HeartManager.MAX_ITEMS_PER_OPERATION + ".</red>"));
+                    return true;
+                }
+                int given = plugin.getHeartManager().giveHeartItems(target, count);
+                sender.sendMessage(mm.deserialize("<green>Gave " + given + " heart item(s) to " + target.getName() + ".</green>"));
             }
             case "set" -> {
                 if (args.length < 3) {
@@ -72,7 +81,8 @@ public class LifestealCommand implements CommandExecutor, TabCompleter {
                     return true;
                 }
                 try {
-                    int hearts = Integer.parseInt(args[2]);
+                    int requested = Integer.parseInt(args[2]);
+                    int hearts = HeartMath.clampHearts(requested);
                     plugin.getHeartManager().setHearts(target, hearts);
                     sender.sendMessage(mm.deserialize("<green>Set " + target.getName() + "'s hearts to " + hearts + ".</green>"));
                 } catch (NumberFormatException e) {
@@ -89,11 +99,12 @@ public class LifestealCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(mm.deserialize("<red>Player not found.</red>"));
                     return true;
                 }
-                if (target.getGameMode() != GameMode.SPECTATOR) {
+                if (!plugin.getHeartManager().isEliminated(target) && target.getGameMode() != GameMode.SPECTATOR) {
                     sender.sendMessage(mm.deserialize(plugin.getConfig().getString("messages.already-alive", "<red>Player is not eliminated.</red>")));
                     return true;
                 }
-                int defHearts = plugin.getConfig().getInt("default-hearts", 10);
+                int defHearts = plugin.getHeartManager().getDefaultHearts();
+                plugin.getHeartManager().setEliminated(target, false);
                 target.setGameMode(GameMode.SURVIVAL);
                 plugin.getHeartManager().setHearts(target, defHearts);
                 target.teleport(target.getWorld().getSpawnLocation());

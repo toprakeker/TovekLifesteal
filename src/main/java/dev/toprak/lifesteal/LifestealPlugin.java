@@ -13,6 +13,7 @@ public final class LifestealPlugin extends JavaPlugin {
     private static LifestealPlugin instance;
     private HeartManager heartManager;
     private NamespacedKey heartKey;
+    private NamespacedKey eliminatedKey;
 
     @Override
     public void onEnable() {
@@ -20,6 +21,7 @@ public final class LifestealPlugin extends JavaPlugin {
         saveDefaultConfig();
 
         this.heartKey = new NamespacedKey(this, "heart_item");
+        this.eliminatedKey = new NamespacedKey(this, "eliminated");
         this.heartManager = new HeartManager(this);
         this.heartManager.registerHeartRecipe();
 
@@ -54,5 +56,9 @@ public final class LifestealPlugin extends JavaPlugin {
 
     public NamespacedKey getHeartKey() {
         return heartKey;
+    }
+
+    public NamespacedKey getEliminatedKey() {
+        return eliminatedKey;
     }
 }
