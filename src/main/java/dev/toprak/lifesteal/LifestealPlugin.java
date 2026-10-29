@@ -9,7 +9,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class LifestealPlugin extends JavaPlugin {
+public class LifestealPlugin extends JavaPlugin {
     private static LifestealPlugin instance;
     private HeartManager heartManager;
     private NamespacedKey heartKey;

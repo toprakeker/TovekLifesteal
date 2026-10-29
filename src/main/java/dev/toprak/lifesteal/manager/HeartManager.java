@@ -5,6 +5,7 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Registry;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Player;
@@ -39,8 +40,16 @@ public class HeartManager {
         return HeartMath.clampHearts(plugin.getConfig().getInt("default-hearts", 10), getMinHearts(), getMaxHearts());
     }
 
+    private static Attribute getMaxHealthAttribute() {
+        Attribute attr = Registry.ATTRIBUTE.get(NamespacedKey.minecraft("generic.max_health"));
+        if (attr != null) return attr;
+        attr = Registry.ATTRIBUTE.get(NamespacedKey.minecraft("max_health"));
+        if (attr != null) return attr;
+        return Registry.ATTRIBUTE.iterator().next();
+    }
+
     public int getHearts(Player player) {
-        AttributeInstance attr = player.getAttribute(Attribute.MAX_HEALTH);
+        AttributeInstance attr = player.getAttribute(getMaxHealthAttribute());
         if (attr == null) return getDefaultHearts();
         return HeartMath.healthToHearts(attr.getBaseValue());
     }
@@ -50,7 +59,7 @@ public class HeartManager {
      * new maximum only when the player is alive (setHealth on a dead player is invalid).
      */
     public void setHearts(Player player, int hearts) {
-        AttributeInstance attr = player.getAttribute(Attribute.MAX_HEALTH);
+        AttributeInstance attr = player.getAttribute(getMaxHealthAttribute());
         if (attr == null) return;
         double health = HeartMath.heartsToHealth(hearts);
         attr.setBaseValue(health);
